@@ -1,3 +1,6 @@
+import { DELTA_MANUAL } from "./corpus/manual";
+import { PRIOR_SESSION } from "./corpus/session";
+
 const langLine = (lang: string) =>
   lang === "Spanish"
     ? `\n\nIMPORTANTE: Todo el contenido en lenguaje natural (explicaciones, oraciones, etiquetas de polos, notas, capas, puente, necesidad, camino amor, etc.) DEBE estar escrito en ESPAÑOL. Las claves JSON, símbolos Σ (Ξ, T, R, E, M, V, S, A, F, φe, φc) y etiquetas dimensionales técnicas se mantienen igual.`
