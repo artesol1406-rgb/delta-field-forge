@@ -276,6 +276,21 @@ export function ReflectPanel() {
         setJournal(`[rewritten ${stamp}]\n` + blocks.journal_rewrite.join("\n\n"));
       }
 
+      // AI-authored documents → PDF download.
+      if (blocks.document.length) {
+        for (const raw of blocks.document) {
+          const { title, subtitle, body } = parseDocumentBlock(raw);
+          try {
+            downloadReportPdf({
+              title,
+              subtitle,
+              filename: `${(title.replace(/[^\w\-]+/g, "_").slice(0, 40) || "document")}-${Date.now()}.pdf`,
+              sections: [{ body }],
+            });
+          } catch { /* best-effort */ }
+        }
+      }
+
       // Visible assistant bubble decision.
       const shouldShow =
         !idle && (
