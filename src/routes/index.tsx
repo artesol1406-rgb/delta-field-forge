@@ -12,7 +12,7 @@ export const Route = createFileRoute("/")({
       { title: "1+1=3 — The Universal Interpreter" },
       { name: "description", content: "Where two poles become a third. Map any concept into 11-dimensional polarity space and translate it across physics, music, psychology, narrative, biology, math, philosophy, ecology." },
       { property: "og:title", content: "1+1=3 — The Universal Interpreter" },
-      { property: "og:description", content: "Two poles in tension produce a third, emergent thing." },
+      { property: "og:description", content: "Where two poles become a third. Map any concept into 11-dimensional polarity space and translate it across physics, music, psychology, narrative, biology, math, philosophy, ecology." },
     ],
   }),
   component: Page,
