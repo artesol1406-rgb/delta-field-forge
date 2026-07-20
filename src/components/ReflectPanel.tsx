@@ -143,6 +143,9 @@ export function ReflectPanel() {
   const [err, setErr] = useState<string | null>(null);
   const [showInner, setShowInner] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const seededRef = useRef<boolean>(false);
+  const firstBootRef = useRef<boolean>(false);
   const endRef = useRef<HTMLDivElement | null>(null);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -155,6 +158,7 @@ export function ReflectPanel() {
     setSelfTalk(loadLS<string>(LS_SELFTALK, ""));
     setMemoryHistory(loadLS<string>(LS_MEMHIST, ""));
     setNextBeatIn(loadLS<string>(LS_NEXTBEAT, "on_next_message"));
+    seededRef.current = loadLS<boolean>(LS_SEEDED, false);
     setHydrated(true);
   }, []);
 
