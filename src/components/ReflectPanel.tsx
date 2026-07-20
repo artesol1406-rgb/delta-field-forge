@@ -20,6 +20,8 @@ const LS_NEXTBEAT = "reflect.nextBeatIn.v1";
 const MAX_BEATS = 60;
 const MAX_SELFTALK_CHARS = 12000;
 const MAX_MEMHIST_CHARS = 12000;
+const WINDOW_MSGS = 12;
+const LS_SEEDED = "reflect.corpusSeeded.v1";
 
 function loadLS<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -39,9 +41,10 @@ function extractAllBlocks(raw: string) {
     beat: [], journal: [], memory: [], pause: [],
     self_talk: [], memory_rewrite: [], journal_rewrite: [],
     coherence: [], mind_logic: [], mind_affect: [], mind_witness: [],
+    document: [],
   };
   const cleaned = raw.replace(
-    /```(beat|journal|memory|pause|self_talk|memory_rewrite|journal_rewrite|coherence|mind_logic|mind_affect|mind_witness)\s*\n?([\s\S]*?)```/g,
+    /```(beat|journal|memory|pause|self_talk|memory_rewrite|journal_rewrite|coherence|mind_logic|mind_affect|mind_witness|document)\s*\n?([\s\S]*?)```/g,
     (_m, tag, body) => {
       const t = String(tag) as keyof typeof blocks;
       blocks[t].push(String(body).trim());
@@ -49,6 +52,22 @@ function extractAllBlocks(raw: string) {
     },
   ).trim();
   return { cleaned, blocks };
+}
+
+function parseDocumentBlock(body: string): { title: string; subtitle?: string; body: string } {
+  const lines = body.split("\n");
+  let title = "Document";
+  let subtitle: string | undefined;
+  let sepIdx = -1;
+  for (let i = 0; i < Math.min(lines.length, 6); i++) {
+    const tm = lines[i].match(/^title:\s*(.+)$/i);
+    const sm = lines[i].match(/^subtitle:\s*(.+)$/i);
+    if (tm) { title = tm[1].trim(); continue; }
+    if (sm) { subtitle = sm[1].trim(); continue; }
+    if (/^---+\s*$/.test(lines[i])) { sepIdx = i; break; }
+  }
+  const rest = sepIdx >= 0 ? lines.slice(sepIdx + 1).join("\n") : lines.join("\n");
+  return { title, subtitle, body: rest.trim() };
 }
 
 function parseBeat(body: string): Omit<BeatEntry, "ts" | "idle"> {
