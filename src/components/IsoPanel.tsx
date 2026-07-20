@@ -1,0 +1,370 @@
+import { useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { deepCompare } from "@/lib/amalgam/amalgam.functions";
+import {
+  fisherRao, midpoint, normalize, signedSignature, metastability,
+  type Vec, type Signs,
+} from "@/lib/amalgam/engine";
+import { SignatureChart } from "./SignatureChart";
+import { downloadReportPdf } from "@/lib/pdf-export";
+import { useLang, langName } from "@/lib/i18n";
+
+type Poles = {
+  activeSpace: string; receptiveSpace: string;
+  activeTime: string;  receptiveTime: string;
+  dynamicSpace: string; staticSpace: string;
+  dynamicTime: string;  staticTime: string;
+};
+
+type DeepResult = {
+  vA: Vec; vB: Vec;
+  signsA: Signs; signsB: Signs;
+  tensionsA: string; tensionsB: string;
+  polesA: Poles; polesB: Poles;
+  polarityPairs: Array<{ labelA: string; labelB: string; dim: string }>;
+  matrix: { spaceTension: string; timeTension: string };
+  isomorphisms: {
+    activeExtreme: string; receptiveExtreme: string;
+    dynamicExtreme: string; staticExtreme: string;
+  };
+  polarityCore: string;
+  analogues: Array<{ system: string; mapping: string }>;
+  layers: { concrete: string; human: string; amalgam: string };
+  bridge: string;
+  necessity: string;
+  caminoAmor: string;
+  aClaimant: string; bClaimant: string;
+};
+
+export function IsoPanel() {
+  const fn = useServerFn(deepCompare);
+  const { lang, t } = useLang();
+  const [aClaimant, setAClaimant] = useState("");
+  const [aClaim, setAClaim] = useState("");
+  const [bClaimant, setBClaimant] = useState("");
+  const [bClaim, setBClaim] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [res, setRes] = useState<DeepResult | null>(null);
+
+  const ready = aClaimant.trim() && aClaim.trim() && bClaimant.trim() && bClaim.trim();
+
+  const run = async () => {
+    if (!ready || loading) return;
+    setLoading(true); setErr(null);
+    try {
+      const r = await fn({ data: {
+        aClaimant: aClaimant.trim(), aClaim: aClaim.trim(),
+        bClaimant: bClaimant.trim(), bClaim: bClaim.trim(),
+        lang: langName(lang),
+      }});
+      if (!r) throw new Error("Empty response");
+      setRes({ ...r, vA: normalize(r.vA), vB: normalize(r.vB), aClaimant: aClaimant.trim(), bClaimant: bClaimant.trim() });
+    } catch (e) { setErr(e instanceof Error ? e.message : t("Something went wrong.", "Algo salió mal.")); }
+    finally { setLoading(false); }
+  };
+
+  const dist = res ? fisherRao(res.vA, res.vB) : 0;
+  const sim = res ? Math.max(0, Math.min(1, 1 - dist / (Math.PI / 2))) : 0;
+  const third = res ? midpoint(res.vA, res.vB) : null;
+  const meta = third ? metastability(third) : null;
+
+  return (
+    <div className="space-y-12">
+      {/* INPUTS */}
+      <div className="grid md:grid-cols-2 gap-6 max-w-6xl mx-auto">
+        <SideInput
+          color="#00f5ff" label={t("Side A", "Lado A")} accent="cyan"
+          claimant={aClaimant} setClaimant={setAClaimant}
+          claim={aClaim} setClaim={setAClaim}
+          placeholderName={t("e.g. Maria, the engineer", "ej. María, la ingeniera")}
+          placeholderClaim={t("State the claim. Context. The argument behind it.", "Formula la afirmación. Contexto. El argumento detrás.")}
+        />
+        <SideInput
+          color="#ff00ea" label={t("Side B", "Lado B")} accent="magenta"
+          claimant={bClaimant} setClaimant={setBClaimant}
+          claim={bClaim} setClaim={setBClaim}
+          placeholderName={t("e.g. Jonas, the operator", "ej. Jonás, el operador")}
+          placeholderClaim={t("State the opposing claim. Context. The argument behind it.", "Formula la afirmación opuesta. Contexto. El argumento detrás.")}
+        />
+      </div>
+      <div className="max-w-6xl mx-auto">
+        <button
+          onClick={run}
+          disabled={loading || !ready}
+          className="block mx-auto px-10 py-3 bg-accent-gold text-background font-semibold rounded-xl hover:bg-accent-gold/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          {loading ? t("Reading the structure…", "Leyendo la estructura…") : t("Read the tensions", "Leer las tensiones")}
+        </button>
+        {err && (
+          <div className="mt-6 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">{err}</div>
+        )}
+      </div>
+
+      {res && (
+        <div className="space-y-10 animate-[fade-up_0.5s_var(--ease-out-expo)]">
+          <div className="flex justify-end">
+            <button
+              onClick={() => downloadReportPdf({
+                title: `${res.aClaimant}  ↔  ${res.bClaimant}`,
+                subtitle: `τ = ${dist.toFixed(3)} rad · ${Math.round(sim * 100)}% ${t("resonance", "resonancia")}${meta ? ` · ${t("metastability", "metaestabilidad")} ${meta.tag} (${meta.label})` : ""}`,
+                filename: `iso-${res.aClaimant}-vs-${res.bClaimant}.pdf`.replace(/\s+/g, "-").toLowerCase(),
+                crystals: [
+                  { vec: res.vA, signature: signedSignature(res.vA, res.signsA), label: res.aClaimant, accent: [0, 245, 255] },
+                  ...(third ? [{ vec: third, signature: `1+1=3`, label: t("The third", "El tercero"), accent: [255, 207, 125] as [number, number, number] }] : []),
+                  { vec: res.vB, signature: signedSignature(res.vB, res.signsB), label: res.bClaimant, accent: [255, 0, 234] },
+                ],
+                sections: [
+                  { heading: res.aClaimant, subheading: signedSignature(res.vA, res.signsA), body: res.tensionsA },
+                  { heading: res.bClaimant, subheading: signedSignature(res.vB, res.signsB), body: res.tensionsB },
+                  { heading: t("Polarity core", "Núcleo de polaridad"), body: res.polarityCore },
+                  { heading: t("Polar pairs detected", "Pares polares detectados"), body: res.polarityPairs.map(p => `${p.labelA}  ↔  ${p.labelB}   (${p.dim})`).join("\n") },
+                  { heading: `${res.aClaimant} — ${t("poles", "polos")}`, body:
+                    `${t("active", "activo")} · ${t("space", "espacio")}:     ${res.polesA.activeSpace}\n${t("active", "activo")} · ${t("time", "tiempo")}:      ${res.polesA.activeTime}\n${t("receptive", "receptivo")} · ${t("space", "espacio")}:  ${res.polesA.receptiveSpace}\n${t("receptive", "receptivo")} · ${t("time", "tiempo")}:   ${res.polesA.receptiveTime}\n${t("dynamic", "dinámico")} · ${t("space", "espacio")}:    ${res.polesA.dynamicSpace}\n${t("dynamic", "dinámico")} · ${t("time", "tiempo")}:     ${res.polesA.dynamicTime}\n${t("static", "estático")} · ${t("space", "espacio")}:     ${res.polesA.staticSpace}\n${t("static", "estático")} · ${t("time", "tiempo")}:      ${res.polesA.staticTime}` },
+                  { heading: `${res.bClaimant} — ${t("poles", "polos")}`, body:
+                    `${t("active", "activo")} · ${t("space", "espacio")}:     ${res.polesB.activeSpace}\n${t("active", "activo")} · ${t("time", "tiempo")}:      ${res.polesB.activeTime}\n${t("receptive", "receptivo")} · ${t("space", "espacio")}:  ${res.polesB.receptiveSpace}\n${t("receptive", "receptivo")} · ${t("time", "tiempo")}:   ${res.polesB.receptiveTime}\n${t("dynamic", "dinámico")} · ${t("space", "espacio")}:    ${res.polesB.dynamicSpace}\n${t("dynamic", "dinámico")} · ${t("time", "tiempo")}:     ${res.polesB.dynamicTime}\n${t("static", "estático")} · ${t("space", "espacio")}:     ${res.polesB.staticSpace}\n${t("static", "estático")} · ${t("time", "tiempo")}:      ${res.polesB.staticTime}` },
+                  { heading: t("Matrix of polar tensions", "Matriz de tensiones polares"), subheading: t("From SPACE", "Desde el ESPACIO"), body: res.matrix.spaceTension },
+                  { subheading: t("From TIME", "Desde el TIEMPO"), body: res.matrix.timeTension },
+                  { heading: t("Isomorphisms across extremes", "Isomorfismos entre extremos"),
+                    body: `${t("Pure active", "Activo puro")}:     ${res.isomorphisms.activeExtreme}\n\n${t("Pure receptive", "Receptivo puro")}:  ${res.isomorphisms.receptiveExtreme}\n\n${t("Pure dynamic", "Dinámico puro")}:    ${res.isomorphisms.dynamicExtreme}\n\n${t("Pure static", "Estático puro")}:     ${res.isomorphisms.staticExtreme}` },
+                  { heading: t("Same polarity, other systems", "Misma polaridad, otros sistemas"),
+                    body: res.analogues.map(a => `${a.system}\n${a.mapping}`).join("\n\n") },
+                  { heading: t("Three layers", "Tres capas"), subheading: t("Concrete · the actual situation", "Concreta · la situación real"), body: res.layers.concrete },
+                  { subheading: t("Human · emotion & subjectivity", "Humana · emoción y subjetividad"), body: res.layers.human },
+                  { subheading: t("Amalgam · holographic tension map", "Amalgama · mapa de tensión holográfico"), body: res.layers.amalgam },
+                  { heading: t("Bridge", "Puente"), body: res.bridge },
+                  { heading: t("Necessity report", "Reporte de necesidad"), body: res.necessity },
+                  { heading: t("Camino amor · minimum coherent next step", "Camino amor · mínimo paso coherente siguiente"), body: res.caminoAmor },
+                ],
+              })}
+              className="text-[10px] uppercase tracking-[0.25em] px-4 py-2 border border-accent-gold/40 text-accent-gold rounded hover:bg-accent-gold/10 transition-colors"
+            >
+              ↓ {t("Download PDF", "Descargar PDF")}
+            </button>
+          </div>
+          {/* SIGNATURES + THIRD */}
+          <div className="grid lg:grid-cols-3 gap-6">
+            <PoleCard
+              label={res.aClaimant}
+              sig={signedSignature(res.vA, res.signsA)}
+              vec={res.vA} color="#00f5ff" tensions={res.tensionsA}
+            />
+            <div className="bg-gradient-to-b from-accent-gold/10 via-white/[0.04] to-accent-gold/10 border border-accent-gold/30 rounded-3xl p-6 flex flex-col items-center text-center">
+              <div className="text-[10px] uppercase tracking-[0.3em] text-accent-gold mb-2">{t("The third", "El tercero")}</div>
+              <div className="font-display font-black text-5xl mb-1">1<span className="text-accent-cyan">+</span>1<span className="text-accent-magenta">=</span><span className="text-accent-gold">3</span></div>
+              <div className="font-mono text-[10px] text-muted mb-1">τ = {dist.toFixed(3)} rad · {Math.round(sim * 100)}% {t("resonance", "resonancia")}</div>
+              {meta && (
+                <div className="font-mono text-[10px] text-accent-gold mb-3">
+                  {t("metastability", "metaestabilidad")} · <span className="text-base align-middle">{meta.tag}</span> <span className="text-muted">({meta.label})</span>
+                </div>
+              )}
+              {third && <SignatureChart vec={third} size={220} color="#ffcf7d" />}
+              <p className="font-serif italic text-lg text-foreground/90 leading-snug mt-4">"{res.polarityCore}"</p>
+            </div>
+            <PoleCard
+              label={res.bClaimant}
+              sig={signedSignature(res.vB, res.signsB)}
+              vec={res.vB} color="#ff00ea" tensions={res.tensionsB}
+            />
+          </div>
+
+          {/* POLARITY PAIRS detected */}
+          <Section title={t("Polar pairs detected", "Pares polares detectados")} subtitle={t("The opposites this situation is actually made of", "Los opuestos que realmente componen esta situación")}>
+            <div className="flex flex-wrap gap-2">
+              {res.polarityPairs.map((p, i) => (
+                <div key={i} className="bg-white/[0.04] border border-white/10 rounded-full pl-1 pr-3 py-1 flex items-center gap-2 text-sm">
+                  <span className="bg-accent-cyan/15 text-accent-cyan px-3 py-0.5 rounded-full text-xs">{p.labelA}</span>
+                  <span className="text-muted text-xs">↔</span>
+                  <span className="bg-accent-magenta/15 text-accent-magenta px-3 py-0.5 rounded-full text-xs">{p.labelB}</span>
+                  <span className="text-muted font-mono text-[10px]">{p.dim}</span>
+                </div>
+              ))}
+            </div>
+          </Section>
+
+          {/* POLES MATRICES */}
+          <div className="grid lg:grid-cols-2 gap-6">
+            <PoleMatrix title={res.aClaimant} color="#00f5ff" poles={res.polesA} />
+            <PoleMatrix title={res.bClaimant} color="#ff00ea" poles={res.polesB} />
+          </div>
+
+          {/* SPACE/TIME TENSION MATRIX */}
+          <Section title={t("Matrix of polar tensions", "Matriz de tensiones polares")} subtitle={t("A ↔ B viewed from space and from time", "A ↔ B visto desde el espacio y desde el tiempo")}>
+            <div className="grid md:grid-cols-2 gap-4">
+              <MatrixCell label={t("From SPACE", "Desde el ESPACIO")} body={res.matrix.spaceTension} accent="text-accent-cyan" />
+              <MatrixCell label={t("From TIME", "Desde el TIEMPO")} body={res.matrix.timeTension} accent="text-accent-magenta" />
+            </div>
+          </Section>
+
+          {/* ISOMORPHISMS */}
+          <Section title={t("Isomorphisms across extremes", "Isomorfismos entre extremos")} subtitle={t("Both sides read from one polar extreme at a time", "Ambos lados leídos desde un extremo polar a la vez")}>
+            <div className="grid md:grid-cols-2 gap-4">
+              <IsoCell label={t("Pure active", "Activo puro")} body={res.isomorphisms.activeExtreme} />
+              <IsoCell label={t("Pure receptive", "Receptivo puro")} body={res.isomorphisms.receptiveExtreme} />
+              <IsoCell label={t("Pure dynamic", "Dinámico puro")} body={res.isomorphisms.dynamicExtreme} />
+              <IsoCell label={t("Pure static", "Estático puro")} body={res.isomorphisms.staticExtreme} />
+            </div>
+          </Section>
+
+          {/* ANALOGUES */}
+          <Section title={t("Same polarity, other systems", "Misma polaridad, otros sistemas")} subtitle={t("Isomorphic structures elsewhere", "Estructuras isomórficas en otros lugares")}>
+            <div className="grid md:grid-cols-3 gap-4">
+              {res.analogues.map((a, i) => (
+                <div key={i} className="bg-white/[0.03] border border-white/10 rounded-2xl p-5">
+                  <div className="text-[10px] uppercase tracking-[0.25em] text-accent-gold mb-2">{a.system}</div>
+                  <p className="text-sm text-foreground/85 leading-relaxed">{a.mapping}</p>
+                </div>
+              ))}
+            </div>
+          </Section>
+
+          {/* THREE LAYERS */}
+          <Section title={t("Three layers", "Tres capas")} subtitle={t("Concrete · Human · Amalgam", "Concreta · Humana · Amalgama")}>
+            <div className="grid md:grid-cols-3 gap-4">
+              <LayerCard label={t("Concrete", "Concreta")} sub={t("the actual situation", "la situación real")} body={res.layers.concrete} ring="border-accent-cyan/30" />
+              <LayerCard label={t("Human", "Humana")} sub={t("emotion & subjectivity", "emoción y subjetividad")} body={res.layers.human} ring="border-accent-magenta/30" />
+              <LayerCard label={t("Amalgam", "Amalgama")} sub={t("holographic tension map", "mapa de tensión holográfico")} body={res.layers.amalgam} ring="border-accent-gold/40" />
+            </div>
+          </Section>
+
+          {/* BRIDGE */}
+          <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-6">
+            <div className="text-[10px] uppercase tracking-[0.3em] text-muted mb-3">{t("Bridge", "Puente")}</div>
+            <p className="font-serif italic text-xl text-foreground/95 leading-snug">{res.bridge}</p>
+          </div>
+
+          {/* NECESSITY + CAMINO AMOR */}
+          <div className="grid lg:grid-cols-2 gap-6">
+            <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-6">
+              <div className="text-[10px] uppercase tracking-[0.3em] text-muted mb-3">{t("Necessity report", "Reporte de necesidad")}</div>
+              <p className="text-base text-foreground/90 leading-relaxed">{res.necessity}</p>
+            </div>
+            <div className="bg-gradient-to-br from-accent-gold/15 to-transparent border border-accent-gold/40 rounded-3xl p-6">
+              <div className="text-[10px] uppercase tracking-[0.3em] text-accent-gold mb-3">{t("Camino amor · minimum coherent next step", "Camino amor · mínimo paso coherente siguiente")}</div>
+              <p className="font-serif italic text-xl text-foreground leading-snug">{res.caminoAmor}</p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SideInput({
+  label, color, accent, claimant, setClaimant, claim, setClaim, placeholderName, placeholderClaim,
+}: {
+  label: string; color: string; accent: "cyan" | "magenta";
+  claimant: string; setClaimant: (v: string) => void;
+  claim: string; setClaim: (v: string) => void;
+  placeholderName: string; placeholderClaim: string;
+}) {
+  const ring = accent === "cyan" ? "border-accent-cyan/30 focus:border-accent-cyan/70" : "border-accent-magenta/30 focus:border-accent-magenta/70";
+  return (
+    <div className="bg-white/[0.02] border border-white/10 rounded-3xl p-5 space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="inline-block w-2 h-2 rounded-full" style={{ background: color }} />
+        <span className="text-[10px] uppercase tracking-[0.3em]" style={{ color }}>{label}</span>
+      </div>
+      <input
+        value={claimant}
+        onChange={(e) => setClaimant(e.target.value)}
+        placeholder={placeholderName}
+        className={`w-full bg-white/5 border ${ring} rounded-xl px-4 py-3 text-sm font-medium focus:outline-none placeholder:text-white/20`}
+      />
+      <textarea
+        value={claim}
+        onChange={(e) => setClaim(e.target.value)}
+        placeholder={placeholderClaim}
+        rows={6}
+        className={`w-full bg-white/5 border ${ring} rounded-xl px-4 py-3 text-sm font-light focus:outline-none placeholder:text-white/20 leading-relaxed resize-y`}
+      />
+    </div>
+  );
+}
+
+function PoleCard({ label, sig, vec, color, tensions }: { label: string; sig: string; vec: Vec; color: string; tensions: string }) {
+  const { t } = useLang();
+  return (
+    <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-6 flex flex-col items-center">
+      <div className="text-[10px] uppercase tracking-[0.3em] mb-1" style={{ color }}>{t("Side", "Lado")}</div>
+      <div className="font-serif italic text-2xl mb-1 text-center">{label}</div>
+      <div className="font-mono text-[11px] text-muted mb-4">{sig}</div>
+      <SignatureChart vec={vec} size={220} color={color} />
+      <p className="text-xs text-foreground/70 mt-4 leading-relaxed text-center">{tensions}</p>
+    </div>
+  );
+}
+
+function PoleMatrix({ title, color, poles }: { title: string; color: string; poles: Poles }) {
+  const { t } = useLang();
+  const Cell = ({ label, value }: { label: string; value: string }) => (
+    <div className="bg-white/[0.02] border border-white/10 rounded-xl p-3">
+      <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted mb-1">{label}</div>
+      <div className="text-xs leading-snug text-foreground/85">{value}</div>
+    </div>
+  );
+  const sp = t("space", "espacio"), ti = t("time", "tiempo");
+  const ac = t("active", "activo"), rc = t("receptive", "receptivo");
+  const dy = t("dynamic", "dinámico"), st = t("static", "estático");
+  return (
+    <div className="bg-white/[0.02] border border-white/10 rounded-3xl p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="inline-block w-2 h-2 rounded-full" style={{ background: color }} />
+        <span className="font-serif italic text-lg">{title}</span>
+        <span className="ml-auto text-[10px] uppercase tracking-[0.25em] text-muted">{t("poles", "polos")}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="text-[10px] uppercase tracking-[0.25em] text-accent-cyan">— {sp} —</div>
+        <div className="text-[10px] uppercase tracking-[0.25em] text-accent-magenta">— {ti} —</div>
+        <Cell label={`${ac} · ${sp}`} value={poles.activeSpace} />
+        <Cell label={`${ac} · ${ti}`} value={poles.activeTime} />
+        <Cell label={`${rc} · ${sp}`} value={poles.receptiveSpace} />
+        <Cell label={`${rc} · ${ti}`} value={poles.receptiveTime} />
+        <Cell label={`${dy} · ${sp}`} value={poles.dynamicSpace} />
+        <Cell label={`${dy} · ${ti}`} value={poles.dynamicTime} />
+        <Cell label={`${st} · ${sp}`} value={poles.staticSpace} />
+        <Cell label={`${st} · ${ti}`} value={poles.staticTime} />
+      </div>
+    </div>
+  );
+}
+
+function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="mb-4">
+        <div className="font-display text-2xl">{title}</div>
+        {subtitle && <div className="text-xs text-muted font-mono uppercase tracking-[0.2em] mt-1">{subtitle}</div>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function MatrixCell({ label, body, accent }: { label: string; body: string; accent: string }) {
+  return (
+    <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-5">
+      <div className={`text-[10px] uppercase tracking-[0.3em] mb-2 ${accent}`}>{label}</div>
+      <p className="text-sm text-foreground/85 leading-relaxed">{body}</p>
+    </div>
+  );
+}
+
+function IsoCell({ label, body }: { label: string; body: string }) {
+  return (
+    <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-5">
+      <div className="text-[10px] uppercase tracking-[0.3em] text-accent-gold mb-2">{label}</div>
+      <p className="text-sm text-foreground/85 leading-relaxed">{body}</p>
+    </div>
+  );
+}
+
+function LayerCard({ label, sub, body, ring }: { label: string; sub: string; body: string; ring: string }) {
+  return (
+    <div className={`bg-white/[0.03] border ${ring} rounded-2xl p-5`}>
+      <div className="text-[10px] uppercase tracking-[0.3em] text-foreground/80 mb-1">{label}</div>
+      <div className="text-[10px] uppercase tracking-[0.2em] text-muted mb-3 font-mono">{sub}</div>
+      <p className="text-sm text-foreground/85 leading-relaxed">{body}</p>
+    </div>
+  );
+}
