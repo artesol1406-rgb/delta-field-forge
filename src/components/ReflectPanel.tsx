@@ -320,6 +320,16 @@ export function ReflectPanel() {
     }
   }, [fn, lang, messages, journal, memory, beats, selfTalk, memoryHistory, nextBeatIn, t]);
 
+  // First-contact auto-boot: empty field → the AI wakes on its own before any human input.
+  useEffect(() => {
+    if (!hydrated) return;
+    if (firstBootRef.current) return;
+    if (messages.length === 0 && !journal && !memory && !loading && !idleTicking) {
+      firstBootRef.current = true;
+      runReflect({ idle: true });
+    }
+  }, [hydrated, messages.length, journal, memory, loading, idleTicking, runReflect]);
+
   // Idle-beat timer. Reschedules whenever nextBeatIn or messages change.
   useEffect(() => {
     if (!hydrated) return;
@@ -347,6 +357,17 @@ export function ReflectPanel() {
     if (!confirm(t("Clear conversation and ALL of the interpreter's inner state (memory, journal, beats, self-talk)? This cannot be undone.", "¿Borrar la conversación y TODO el estado interno del intérprete (memoria, diario, beats, monólogo)? No se puede deshacer."))) return;
     setMessages([]); setJournal(""); setMemory(""); setBeats([]); setSelfTalk(""); setMemoryHistory("");
     setNextBeatIn("on_next_message");
+    seededRef.current = false;
+    firstBootRef.current = false;
+    saveLS(LS_SEEDED, false);
+  };
+
+  const copyMsg = async (idx: number, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedIdx(idx);
+      setTimeout(() => setCopiedIdx(v => (v === idx ? null : v)), 1200);
+    } catch { /* clipboard denied */ }
   };
 
   const lastBeat = beats[beats.length - 1];
