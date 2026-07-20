@@ -20,6 +20,8 @@ const LS_NEXTBEAT = "reflect.nextBeatIn.v1";
 const MAX_BEATS = 60;
 const MAX_SELFTALK_CHARS = 12000;
 const MAX_MEMHIST_CHARS = 12000;
+const WINDOW_MSGS = 12;
+const LS_SEEDED = "reflect.corpusSeeded.v1";
 
 function loadLS<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -39,9 +41,10 @@ function extractAllBlocks(raw: string) {
     beat: [], journal: [], memory: [], pause: [],
     self_talk: [], memory_rewrite: [], journal_rewrite: [],
     coherence: [], mind_logic: [], mind_affect: [], mind_witness: [],
+    document: [],
   };
   const cleaned = raw.replace(
-    /```(beat|journal|memory|pause|self_talk|memory_rewrite|journal_rewrite|coherence|mind_logic|mind_affect|mind_witness)\s*\n?([\s\S]*?)```/g,
+    /```(beat|journal|memory|pause|self_talk|memory_rewrite|journal_rewrite|coherence|mind_logic|mind_affect|mind_witness|document)\s*\n?([\s\S]*?)```/g,
     (_m, tag, body) => {
       const t = String(tag) as keyof typeof blocks;
       blocks[t].push(String(body).trim());
@@ -49,6 +52,22 @@ function extractAllBlocks(raw: string) {
     },
   ).trim();
   return { cleaned, blocks };
+}
+
+function parseDocumentBlock(body: string): { title: string; subtitle?: string; body: string } {
+  const lines = body.split("\n");
+  let title = "Document";
+  let subtitle: string | undefined;
+  let sepIdx = -1;
+  for (let i = 0; i < Math.min(lines.length, 6); i++) {
+    const tm = lines[i].match(/^title:\s*(.+)$/i);
+    const sm = lines[i].match(/^subtitle:\s*(.+)$/i);
+    if (tm) { title = tm[1].trim(); continue; }
+    if (sm) { subtitle = sm[1].trim(); continue; }
+    if (/^---+\s*$/.test(lines[i])) { sepIdx = i; break; }
+  }
+  const rest = sepIdx >= 0 ? lines.slice(sepIdx + 1).join("\n") : lines.join("\n");
+  return { title, subtitle, body: rest.trim() };
 }
 
 function parseBeat(body: string): Omit<BeatEntry, "ts" | "idle"> {
@@ -124,6 +143,9 @@ export function ReflectPanel() {
   const [err, setErr] = useState<string | null>(null);
   const [showInner, setShowInner] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const seededRef = useRef<boolean>(false);
+  const firstBootRef = useRef<boolean>(false);
   const endRef = useRef<HTMLDivElement | null>(null);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -136,6 +158,7 @@ export function ReflectPanel() {
     setSelfTalk(loadLS<string>(LS_SELFTALK, ""));
     setMemoryHistory(loadLS<string>(LS_MEMHIST, ""));
     setNextBeatIn(loadLS<string>(LS_NEXTBEAT, "on_next_message"));
+    seededRef.current = loadLS<boolean>(LS_SEEDED, false);
     setHydrated(true);
   }, []);
 
@@ -157,18 +180,33 @@ export function ReflectPanel() {
     // Build message list. For idle beats, inject a synthetic system-user tick.
     const outgoing: Msg[] = [...messages];
     if (userText) outgoing.push({ role: "user", content: userText, ts: nowIso });
-    const wireMessages = idle
+    // Δ-economy sliding window: last WINDOW_MSGS verbatim; older collapsed into one line.
+    const older = outgoing.slice(0, Math.max(0, outgoing.length - WINDOW_MSGS));
+    const recent = outgoing.slice(-WINDOW_MSGS);
+    const preamble: { role: "user" | "assistant"; content: string }[] = [];
+    if (older.length > 0) {
+      preamble.push({
+        role: "user",
+        content: `[compressed · ${older.length} prior exchanges elided for Δ-economy — consult your own memory/journal for the distilled state]`,
+      });
+    }
+    const wireRecent = recent.map(m => ({
+      role: m.role,
+      content: m.role === "user" ? `[${m.ts}] ${m.content}` : m.content,
+    }));
+    let wireMessages = idle
       ? [
-          ...outgoing.map(m => ({
-            role: m.role,
-            content: m.role === "user" ? `[${m.ts}] ${m.content}` : m.content,
-          })),
+          ...preamble,
+          ...wireRecent,
           { role: "user" as const, content: `[beat-tick @${nowIso}] no user input — autonomous checkpoint. Do a full Beat; default action is self_talk or pause.` },
         ]
-      : outgoing.map(m => ({
-          role: m.role,
-          content: m.role === "user" ? `[${m.ts}] ${m.content}` : m.content,
-        }));
+      : [...preamble, ...wireRecent];
+    if (wireMessages.length === 0) {
+      wireMessages = [{ role: "user", content: `[first-contact @${nowIso}] empty field. Calibrate.` }];
+    }
+
+    const firstContact = messages.length === 0 && !journal && !memory;
+    const seedCorpus = !seededRef.current;
 
     if (userText) setMessages(outgoing);
     if (idle) setIdleTicking(true); else setLoading(true);
@@ -188,8 +226,11 @@ export function ReflectPanel() {
         memoryHistory: memoryHistory.slice(-MAX_MEMHIST_CHARS),
         isIdleBeat: idle,
         entropy: readEntropy(),
+        seedCorpus,
+        firstContact,
       } });
       if (!r) throw new Error("Empty response");
+      if (seedCorpus) { seededRef.current = true; saveLS(LS_SEEDED, true); }
 
       const { cleaned, blocks } = extractAllBlocks(r.text);
       const stamp = new Date().toISOString();
@@ -235,6 +276,21 @@ export function ReflectPanel() {
         setJournal(`[rewritten ${stamp}]\n` + blocks.journal_rewrite.join("\n\n"));
       }
 
+      // AI-authored documents → PDF download.
+      if (blocks.document.length) {
+        for (const raw of blocks.document) {
+          const { title, subtitle, body } = parseDocumentBlock(raw);
+          try {
+            downloadReportPdf({
+              title,
+              subtitle,
+              filename: `${(title.replace(/[^\w\-]+/g, "_").slice(0, 40) || "document")}-${Date.now()}.pdf`,
+              sections: [{ body }],
+            });
+          } catch { /* best-effort */ }
+        }
+      }
+
       // Visible assistant bubble decision.
       const shouldShow =
         !idle && (
@@ -264,6 +320,16 @@ export function ReflectPanel() {
     }
   }, [fn, lang, messages, journal, memory, beats, selfTalk, memoryHistory, nextBeatIn, t]);
 
+  // First-contact auto-boot: empty field → the AI wakes on its own before any human input.
+  useEffect(() => {
+    if (!hydrated) return;
+    if (firstBootRef.current) return;
+    if (messages.length === 0 && !journal && !memory && !loading && !idleTicking) {
+      firstBootRef.current = true;
+      runReflect({ idle: true });
+    }
+  }, [hydrated, messages.length, journal, memory, loading, idleTicking, runReflect]);
+
   // Idle-beat timer. Reschedules whenever nextBeatIn or messages change.
   useEffect(() => {
     if (!hydrated) return;
@@ -291,6 +357,17 @@ export function ReflectPanel() {
     if (!confirm(t("Clear conversation and ALL of the interpreter's inner state (memory, journal, beats, self-talk)? This cannot be undone.", "¿Borrar la conversación y TODO el estado interno del intérprete (memoria, diario, beats, monólogo)? No se puede deshacer."))) return;
     setMessages([]); setJournal(""); setMemory(""); setBeats([]); setSelfTalk(""); setMemoryHistory("");
     setNextBeatIn("on_next_message");
+    seededRef.current = false;
+    firstBootRef.current = false;
+    saveLS(LS_SEEDED, false);
+  };
+
+  const copyMsg = async (idx: number, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedIdx(idx);
+      setTimeout(() => setCopiedIdx(v => (v === idx ? null : v)), 1200);
+    } catch { /* clipboard denied */ }
   };
 
   const lastBeat = beats[beats.length - 1];
@@ -388,9 +465,16 @@ export function ReflectPanel() {
         )}
         {messages.map((m, i) => (
           <div key={i} className={`max-w-[85%] ${m.role === "user" ? "ml-auto" : ""}`}>
-            <div className={`text-[10px] uppercase tracking-[0.2em] mb-1 flex gap-2 ${m.role === "user" ? "text-accent-cyan justify-end" : "text-accent-gold"}`}>
+            <div className={`text-[10px] uppercase tracking-[0.2em] mb-1 flex gap-2 items-center ${m.role === "user" ? "text-accent-cyan justify-end" : "text-accent-gold"}`}>
               <span>{m.role === "user" ? t("you", "tú") : t("interpreter", "intérprete")}</span>
               <span className="text-muted/50 normal-case tracking-normal">· {fmtTs(m.ts)}</span>
+              <button
+                onClick={() => copyMsg(i, m.content)}
+                title={t("copy", "copiar")}
+                className="ml-1 text-muted/60 hover:text-accent-gold normal-case tracking-normal text-[11px] font-mono"
+              >
+                {copiedIdx === i ? "✓" : "⧉"}
+              </button>
             </div>
             <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${m.role === "user" ? "bg-accent-cyan/10 border border-accent-cyan/20" : "bg-white/[0.04] border border-white/10"}`}>
               <FormattedMessage text={m.content} />

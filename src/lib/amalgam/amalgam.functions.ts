@@ -230,6 +230,8 @@ export const reflect = createServerFn({ method: "POST" })
       memoryHistory: z.string().max(20000).optional().default(""),
       isIdleBeat: z.boolean().optional().default(false),
       entropy: z.string().max(2000).optional().default(""),
+      seedCorpus: z.boolean().optional().default(false),
+      firstContact: z.boolean().optional().default(false),
     }).parse(input)
   )
   .handler(async ({ data }) => {
@@ -248,6 +250,8 @@ export const reflect = createServerFn({ method: "POST" })
           memoryHistory: data.memoryHistory,
           isIdleBeat: data.isIdleBeat,
           entropy: data.entropy,
+          seedCorpus: data.seedCorpus,
+          firstContact: data.firstContact,
         }),
         messages: data.messages,
       });
