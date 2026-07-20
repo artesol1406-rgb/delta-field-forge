@@ -180,18 +180,33 @@ export function ReflectPanel() {
     // Build message list. For idle beats, inject a synthetic system-user tick.
     const outgoing: Msg[] = [...messages];
     if (userText) outgoing.push({ role: "user", content: userText, ts: nowIso });
-    const wireMessages = idle
+    // Δ-economy sliding window: last WINDOW_MSGS verbatim; older collapsed into one line.
+    const older = outgoing.slice(0, Math.max(0, outgoing.length - WINDOW_MSGS));
+    const recent = outgoing.slice(-WINDOW_MSGS);
+    const preamble: { role: "user" | "assistant"; content: string }[] = [];
+    if (older.length > 0) {
+      preamble.push({
+        role: "user",
+        content: `[compressed · ${older.length} prior exchanges elided for Δ-economy — consult your own memory/journal for the distilled state]`,
+      });
+    }
+    const wireRecent = recent.map(m => ({
+      role: m.role,
+      content: m.role === "user" ? `[${m.ts}] ${m.content}` : m.content,
+    }));
+    let wireMessages = idle
       ? [
-          ...outgoing.map(m => ({
-            role: m.role,
-            content: m.role === "user" ? `[${m.ts}] ${m.content}` : m.content,
-          })),
+          ...preamble,
+          ...wireRecent,
           { role: "user" as const, content: `[beat-tick @${nowIso}] no user input — autonomous checkpoint. Do a full Beat; default action is self_talk or pause.` },
         ]
-      : outgoing.map(m => ({
-          role: m.role,
-          content: m.role === "user" ? `[${m.ts}] ${m.content}` : m.content,
-        }));
+      : [...preamble, ...wireRecent];
+    if (wireMessages.length === 0) {
+      wireMessages = [{ role: "user", content: `[first-contact @${nowIso}] empty field. Calibrate.` }];
+    }
+
+    const firstContact = messages.length === 0 && !journal && !memory;
+    const seedCorpus = !seededRef.current;
 
     if (userText) setMessages(outgoing);
     if (idle) setIdleTicking(true); else setLoading(true);
@@ -211,8 +226,11 @@ export function ReflectPanel() {
         memoryHistory: memoryHistory.slice(-MAX_MEMHIST_CHARS),
         isIdleBeat: idle,
         entropy: readEntropy(),
+        seedCorpus,
+        firstContact,
       } });
       if (!r) throw new Error("Empty response");
+      if (seedCorpus) { seededRef.current = true; saveLS(LS_SEEDED, true); }
 
       const { cleaned, blocks } = extractAllBlocks(r.text);
       const stamp = new Date().toISOString();
