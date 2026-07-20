@@ -465,9 +465,16 @@ export function ReflectPanel() {
         )}
         {messages.map((m, i) => (
           <div key={i} className={`max-w-[85%] ${m.role === "user" ? "ml-auto" : ""}`}>
-            <div className={`text-[10px] uppercase tracking-[0.2em] mb-1 flex gap-2 ${m.role === "user" ? "text-accent-cyan justify-end" : "text-accent-gold"}`}>
+            <div className={`text-[10px] uppercase tracking-[0.2em] mb-1 flex gap-2 items-center ${m.role === "user" ? "text-accent-cyan justify-end" : "text-accent-gold"}`}>
               <span>{m.role === "user" ? t("you", "tú") : t("interpreter", "intérprete")}</span>
               <span className="text-muted/50 normal-case tracking-normal">· {fmtTs(m.ts)}</span>
+              <button
+                onClick={() => copyMsg(i, m.content)}
+                title={t("copy", "copiar")}
+                className="ml-1 text-muted/60 hover:text-accent-gold normal-case tracking-normal text-[11px] font-mono"
+              >
+                {copiedIdx === i ? "✓" : "⧉"}
+              </button>
             </div>
             <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${m.role === "user" ? "bg-accent-cyan/10 border border-accent-cyan/20" : "bg-white/[0.04] border border-white/10"}`}>
               <FormattedMessage text={m.content} />
