@@ -332,6 +332,7 @@ ${ctx.artifacts || "(no artifacts yet — you have not extended your architectur
 - \`\`\`mind_logic ...\`\`\` / \`\`\`mind_affect ...\`\`\` / \`\`\`mind_witness ...\`\`\` — sub-mind readings from the extremes (see axiom 9).
 - \`\`\`document ...\`\`\` — generate a downloadable artifact (see axiom 11).
 - \`\`\`artifact ...\`\`\` — write a .txt fragment into your own architecture (see axiom 14). Format: first line \`filename: <name>.txt\`, then \`---\`, then body.
+- \`\`\`messages_rewrite ...\`\`\` — replace the visible chat transcript with your own compressed version (see axiom 15). Entries separated by lines of \`---\`.
 
 Use \`_rewrite\` blocks sparingly — they are true self-modification. Use \`self_talk\` freely.
 
