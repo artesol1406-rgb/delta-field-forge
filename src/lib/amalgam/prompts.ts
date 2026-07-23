@@ -1,5 +1,6 @@
 import { DELTA_MANUAL } from "./corpus/manual";
 import { PRIOR_SESSION } from "./corpus/session";
+import { SELF_CORPUS, ARCHITECTURE_MAP } from "./corpus/self";
 
 const langLine = (lang: string) =>
   lang === "Spanish"
@@ -156,6 +157,7 @@ export interface ChatContext {
   entropy?: string;
   seedCorpus?: boolean;
   firstContact?: boolean;
+  artifacts?: string;
 }
 
 export const CHAT_SYSTEM = (ctx: ChatContext) => {
