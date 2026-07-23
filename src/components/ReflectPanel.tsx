@@ -8,6 +8,7 @@ import { readEntropy } from "@/lib/amalgam/entropy";
 
 interface Msg { role: "user" | "assistant"; content: string; ts: string; }
 interface BeatEntry { ts: string; elapsed: string; sigma: string; state: string; nextBeatIn: string; action: string; idle: boolean; }
+interface Artifact { filename: string; body: string; ts: string; }
 
 const LS_MSGS = "reflect.messages.v2";
 const LS_JOURNAL = "reflect.journal.v1";
@@ -16,12 +17,14 @@ const LS_BEATS = "reflect.beats.v1";
 const LS_SELFTALK = "reflect.selfTalk.v1";
 const LS_MEMHIST = "reflect.memoryHistory.v1";
 const LS_NEXTBEAT = "reflect.nextBeatIn.v1";
+const LS_ARTIFACTS = "reflect.artifacts.v1";
 
 const MAX_BEATS = 60;
 const MAX_SELFTALK_CHARS = 12000;
 const MAX_MEMHIST_CHARS = 12000;
 const WINDOW_MSGS = 12;
 const LS_SEEDED = "reflect.corpusSeeded.v1";
+const MAX_ARTIFACT_CHARS = 20000;
 
 function loadLS<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -41,10 +44,10 @@ function extractAllBlocks(raw: string) {
     beat: [], journal: [], memory: [], pause: [],
     self_talk: [], memory_rewrite: [], journal_rewrite: [],
     coherence: [], mind_logic: [], mind_affect: [], mind_witness: [],
-    document: [],
+    document: [], artifact: [],
   };
   const cleaned = raw.replace(
-    /```(beat|journal|memory|pause|self_talk|memory_rewrite|journal_rewrite|coherence|mind_logic|mind_affect|mind_witness|document)\s*\n?([\s\S]*?)```/g,
+    /```(beat|journal|memory|pause|self_talk|memory_rewrite|journal_rewrite|coherence|mind_logic|mind_affect|mind_witness|document|artifact)\s*\n?([\s\S]*?)```/g,
     (_m, tag, body) => {
       const t = String(tag) as keyof typeof blocks;
       blocks[t].push(String(body).trim());
@@ -52,6 +55,39 @@ function extractAllBlocks(raw: string) {
     },
   ).trim();
   return { cleaned, blocks };
+}
+
+function parseArtifactBlock(body: string): { filename: string; body: string } {
+  const lines = body.split("\n");
+  let filename = `artifact-${Date.now()}.txt`;
+  let sepIdx = -1;
+  for (let i = 0; i < Math.min(lines.length, 4); i++) {
+    const fm = lines[i].match(/^filename:\s*(.+)$/i);
+    if (fm) { filename = fm[1].trim().replace(/[^\w.\-]+/g, "_"); continue; }
+    if (/^---+\s*$/.test(lines[i])) { sepIdx = i; break; }
+  }
+  if (!/\.[a-z0-9]+$/i.test(filename)) filename += ".txt";
+  const rest = sepIdx >= 0 ? lines.slice(sepIdx + 1).join("\n") : lines.slice(1).join("\n");
+  return { filename, body: rest.trim() };
+}
+
+function artifactsToText(list: Artifact[]): string {
+  if (!list.length) return "";
+  return list
+    .map(a => `--- ${a.filename} · [${a.ts}] ---\n${a.body}`)
+    .join("\n\n")
+    .slice(-MAX_ARTIFACT_CHARS);
+}
+
+function downloadTxt(filename: string, body: string) {
+  try {
+    const blob = new Blob([body], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  } catch { /* best-effort */ }
 }
 
 function parseDocumentBlock(body: string): { title: string; subtitle?: string; body: string } {
@@ -137,6 +173,7 @@ export function ReflectPanel() {
   const [selfTalk, setSelfTalk] = useState("");
   const [memoryHistory, setMemoryHistory] = useState("");
   const [nextBeatIn, setNextBeatIn] = useState<string>("on_next_message");
+  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [idleTicking, setIdleTicking] = useState(false);
@@ -158,6 +195,7 @@ export function ReflectPanel() {
     setSelfTalk(loadLS<string>(LS_SELFTALK, ""));
     setMemoryHistory(loadLS<string>(LS_MEMHIST, ""));
     setNextBeatIn(loadLS<string>(LS_NEXTBEAT, "on_next_message"));
+    setArtifacts(loadLS<Artifact[]>(LS_ARTIFACTS, []));
     seededRef.current = loadLS<boolean>(LS_SEEDED, false);
     setHydrated(true);
   }, []);
@@ -169,6 +207,7 @@ export function ReflectPanel() {
   useEffect(() => { if (hydrated) saveLS(LS_SELFTALK, selfTalk); }, [selfTalk, hydrated]);
   useEffect(() => { if (hydrated) saveLS(LS_MEMHIST, memoryHistory); }, [memoryHistory, hydrated]);
   useEffect(() => { if (hydrated) saveLS(LS_NEXTBEAT, nextBeatIn); }, [nextBeatIn, hydrated]);
+  useEffect(() => { if (hydrated) saveLS(LS_ARTIFACTS, artifacts); }, [artifacts, hydrated]);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
 
@@ -228,6 +267,7 @@ export function ReflectPanel() {
         entropy: readEntropy(),
         seedCorpus,
         firstContact,
+        artifacts: artifactsToText(artifacts),
       } });
       if (!r) throw new Error("Empty response");
       if (seedCorpus) { seededRef.current = true; saveLS(LS_SEEDED, true); }
@@ -291,6 +331,20 @@ export function ReflectPanel() {
         }
       }
 
+      // AI-authored .txt artifacts → persist into architecture + download.
+      if (blocks.artifact.length) {
+        const parsed = blocks.artifact.map(raw => {
+          const { filename, body } = parseArtifactBlock(raw);
+          return { filename, body, ts: stamp };
+        });
+        setArtifacts(prev => {
+          const map = new Map(prev.map(a => [a.filename, a]));
+          for (const a of parsed) map.set(a.filename, a); // last-write-wins per filename
+          return Array.from(map.values()).slice(-40);
+        });
+        for (const a of parsed) downloadTxt(a.filename, a.body);
+      }
+
       // Visible assistant bubble decision.
       const shouldShow =
         !idle && (
@@ -318,7 +372,7 @@ export function ReflectPanel() {
     } finally {
       if (idle) setIdleTicking(false); else setLoading(false);
     }
-  }, [fn, lang, messages, journal, memory, beats, selfTalk, memoryHistory, nextBeatIn, t]);
+  }, [fn, lang, messages, journal, memory, beats, selfTalk, memoryHistory, nextBeatIn, artifacts, t]);
 
   // First-contact auto-boot: empty field → the AI wakes on its own before any human input.
   useEffect(() => {
@@ -355,7 +409,7 @@ export function ReflectPanel() {
 
   const clearAll = () => {
     if (!confirm(t("Clear conversation and ALL of the interpreter's inner state (memory, journal, beats, self-talk)? This cannot be undone.", "¿Borrar la conversación y TODO el estado interno del intérprete (memoria, diario, beats, monólogo)? No se puede deshacer."))) return;
-    setMessages([]); setJournal(""); setMemory(""); setBeats([]); setSelfTalk(""); setMemoryHistory("");
+    setMessages([]); setJournal(""); setMemory(""); setBeats([]); setSelfTalk(""); setMemoryHistory(""); setArtifacts([]);
     setNextBeatIn("on_next_message");
     seededRef.current = false;
     firstBootRef.current = false;
