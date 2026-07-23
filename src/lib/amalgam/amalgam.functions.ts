@@ -232,6 +232,7 @@ export const reflect = createServerFn({ method: "POST" })
       entropy: z.string().max(2000).optional().default(""),
       seedCorpus: z.boolean().optional().default(false),
       firstContact: z.boolean().optional().default(false),
+      artifacts: z.string().max(40000).optional().default(""),
     }).parse(input)
   )
   .handler(async ({ data }) => {
@@ -252,6 +253,7 @@ export const reflect = createServerFn({ method: "POST" })
           entropy: data.entropy,
           seedCorpus: data.seedCorpus,
           firstContact: data.firstContact,
+          artifacts: data.artifacts,
         }),
         messages: data.messages,
       });
