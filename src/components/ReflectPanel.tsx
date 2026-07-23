@@ -503,6 +503,28 @@ export function ReflectPanel() {
                 <InnerPanel label={t("Memory history (archived rewrites)", "Historial de memoria (reescrituras archivadas)")} tone="muted" body={memoryHistory} empty="" />
               </div>
             )}
+            {artifacts.length > 0 && (
+              <div className="md:col-span-2">
+                <div className="text-[10px] uppercase tracking-[0.25em] mb-1 text-accent-gold flex justify-between items-baseline">
+                  <span>{t("Self-authored artifacts (.txt in her architecture)", "Artefactos auto-escritos (.txt en su arquitectura)")}</span>
+                  <span className="text-[9px] tracking-normal normal-case text-muted/70 font-mono">{artifacts.length}</span>
+                </div>
+                <div className="w-full max-h-64 overflow-auto bg-black/30 border border-accent-gold/20 rounded-xl p-3 text-xs font-mono text-white/70 space-y-3">
+                  {artifacts.map((a, i) => (
+                    <div key={i} className="border-b border-white/5 pb-2 last:border-0">
+                      <div className="flex justify-between items-baseline mb-1">
+                        <span className="text-accent-gold">{a.filename}</span>
+                        <button
+                          onClick={() => downloadTxt(a.filename, a.body)}
+                          className="text-[9px] uppercase tracking-widest text-muted hover:text-accent-gold"
+                        >↓ .txt</button>
+                      </div>
+                      <pre className="whitespace-pre-wrap text-white/60">{a.body}</pre>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
