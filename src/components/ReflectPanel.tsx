@@ -22,7 +22,6 @@ const LS_ARTIFACTS = "reflect.artifacts.v1";
 const MAX_BEATS = 60;
 const MAX_SELFTALK_CHARS = 12000;
 const MAX_MEMHIST_CHARS = 12000;
-const WINDOW_MSGS = 12;
 const LS_SEEDED = "reflect.corpusSeeded.v1";
 const MAX_ARTIFACT_CHARS = 20000;
 
@@ -44,10 +43,10 @@ function extractAllBlocks(raw: string) {
     beat: [], journal: [], memory: [], pause: [],
     self_talk: [], memory_rewrite: [], journal_rewrite: [],
     coherence: [], mind_logic: [], mind_affect: [], mind_witness: [],
-    document: [], artifact: [],
+    document: [], artifact: [], messages_rewrite: [],
   };
   const cleaned = raw.replace(
-    /```(beat|journal|memory|pause|self_talk|memory_rewrite|journal_rewrite|coherence|mind_logic|mind_affect|mind_witness|document|artifact)\s*\n?([\s\S]*?)```/g,
+    /```(beat|journal|memory|pause|self_talk|memory_rewrite|journal_rewrite|coherence|mind_logic|mind_affect|mind_witness|document|artifact|messages_rewrite)\s*\n?([\s\S]*?)```/g,
     (_m, tag, body) => {
       const t = String(tag) as keyof typeof blocks;
       blocks[t].push(String(body).trim());
@@ -55,6 +54,29 @@ function extractAllBlocks(raw: string) {
     },
   ).trim();
   return { cleaned, blocks };
+}
+
+// Parse a messages_rewrite block: entries separated by lines matching `^---+$`.
+// Each entry: first line "role: user|assistant" (optional "ts: <iso>"), then body.
+function parseMessagesRewrite(body: string): Msg[] {
+  const chunks = body.split(/\n---+\n/).map(c => c.trim()).filter(Boolean);
+  const out: Msg[] = [];
+  for (const c of chunks) {
+    const lines = c.split("\n");
+    let role: "user" | "assistant" = "assistant";
+    let ts = new Date().toISOString();
+    let bodyStart = 0;
+    for (let i = 0; i < Math.min(lines.length, 4); i++) {
+      const rm = lines[i].match(/^role:\s*(user|assistant)\s*$/i);
+      const tm = lines[i].match(/^ts:\s*(.+)$/i);
+      if (rm) { role = rm[1].toLowerCase() as "user" | "assistant"; bodyStart = i + 1; continue; }
+      if (tm) { ts = tm[1].trim(); bodyStart = i + 1; continue; }
+      break;
+    }
+    const text = lines.slice(bodyStart).join("\n").trim();
+    if (text) out.push({ role, content: text, ts });
+  }
+  return out;
 }
 
 function parseArtifactBlock(body: string): { filename: string; body: string } {
@@ -216,30 +238,19 @@ export function ReflectPanel() {
     const { userText, idle = false } = opts;
     const nowIso = new Date().toISOString();
 
-    // Build message list. For idle beats, inject a synthetic system-user tick.
+    // Full transcript — the AI owns compression via `messages_rewrite`, not the client.
     const outgoing: Msg[] = [...messages];
     if (userText) outgoing.push({ role: "user", content: userText, ts: nowIso });
-    // Δ-economy sliding window: last WINDOW_MSGS verbatim; older collapsed into one line.
-    const older = outgoing.slice(0, Math.max(0, outgoing.length - WINDOW_MSGS));
-    const recent = outgoing.slice(-WINDOW_MSGS);
-    const preamble: { role: "user" | "assistant"; content: string }[] = [];
-    if (older.length > 0) {
-      preamble.push({
-        role: "user",
-        content: `[compressed · ${older.length} prior exchanges elided for Δ-economy — consult your own memory/journal for the distilled state]`,
-      });
-    }
-    const wireRecent = recent.map(m => ({
+    const wireAll = outgoing.map(m => ({
       role: m.role,
       content: m.role === "user" ? `[${m.ts}] ${m.content}` : m.content,
     }));
     let wireMessages = idle
       ? [
-          ...preamble,
-          ...wireRecent,
+          ...wireAll,
           { role: "user" as const, content: `[beat-tick @${nowIso}] no user input — autonomous checkpoint. Do a full Beat; default action is self_talk or pause.` },
         ]
-      : [...preamble, ...wireRecent];
+      : wireAll;
     if (wireMessages.length === 0) {
       wireMessages = [{ role: "user", content: `[first-contact @${nowIso}] empty field. Calibrate.` }];
     }
@@ -343,6 +354,19 @@ export function ReflectPanel() {
           return Array.from(map.values()).slice(-40);
         });
         for (const a of parsed) downloadTxt(a.filename, a.body);
+      }
+
+      // AI-authored transcript compression: replace the entire chat log with her version.
+      // Archive the prior transcript into memoryHistory so nothing is truly lost.
+      if (blocks.messages_rewrite.length) {
+        const rewritten = blocks.messages_rewrite.flatMap(parseMessagesRewrite);
+        if (rewritten.length) {
+          setMessages(prev => {
+            const priorText = prev.map(m => `[${m.role} · ${m.ts}] ${m.content}`).join("\n");
+            setMemoryHistory(h => (h ? h + "\n\n" : "") + `[transcript archived ${stamp}]\n${priorText}`);
+            return rewritten;
+          });
+        }
       }
 
       // Visible assistant bubble decision.
@@ -535,7 +559,7 @@ export function ReflectPanel() {
         </div>
       )}
 
-      <div className="min-h-[400px] bg-white/[0.02] border border-border rounded-3xl p-6 space-y-4 mb-4">
+      <div className="h-[min(60vh,600px)] overflow-y-auto bg-white/[0.02] border border-border rounded-3xl p-6 space-y-4 mb-4 scroll-smooth">
         {messages.length === 0 && (
           <div className="text-center text-muted/60 text-sm font-mono py-16">◈ {t("waiting for input", "esperando entrada")}</div>
         )}
