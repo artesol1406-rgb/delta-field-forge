@@ -559,7 +559,7 @@ export function ReflectPanel() {
         </div>
       )}
 
-      <div className="min-h-[400px] bg-white/[0.02] border border-border rounded-3xl p-6 space-y-4 mb-4">
+      <div className="h-[min(60vh,600px)] overflow-y-auto bg-white/[0.02] border border-border rounded-3xl p-6 space-y-4 mb-4 scroll-smooth">
         {messages.length === 0 && (
           <div className="text-center text-muted/60 text-sm font-mono py-16">◈ {t("waiting for input", "esperando entrada")}</div>
         )}
