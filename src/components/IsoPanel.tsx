@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { deepCompare } from "@/lib/amalgam/amalgam.functions";
 import {
-  fisherRao, midpoint, normalize, signedSignature, metastability,
+  fisherRao, normalize, amalgam, aprTension, fisherRaoDipole, curvature, breathes, signedSignature, metastability,
   type Vec, type Signs,
 } from "@/lib/amalgam/engine";
 import { SignatureChart } from "./SignatureChart";
@@ -66,7 +66,12 @@ export function IsoPanel() {
 
   const dist = res ? fisherRao(res.vA, res.vB) : 0;
   const sim = res ? Math.max(0, Math.min(1, 1 - dist / (Math.PI / 2))) : 0;
-  const third = res ? midpoint(res.vA, res.vB) : null;
+  // Manual Δ Fase 3: the third is √(A·B), not the arithmetic mean.
+  const third = res ? amalgam(res.vA, res.vB) : null;
+  const tau = res ? aprTension(res.vA, res.vB) : 0;        // APR v2: τ = sin²θ
+  const dFR = res ? fisherRaoDipole(res.vA, res.vB) : 0;    // Manual Parte V
+  const curv = res ? curvature(res.vA, res.vB) : 0;         // ∇
+  const breath = third ? breathes(third) : true;            // I3
   const meta = third ? metastability(third) : null;
 
   return (
@@ -107,7 +112,7 @@ export function IsoPanel() {
             <button
               onClick={() => downloadReportPdf({
                 title: `${res.aClaimant}  ↔  ${res.bClaimant}`,
-                subtitle: `τ = ${dist.toFixed(3)} rad · ${Math.round(sim * 100)}% ${t("resonance", "resonancia")}${meta ? ` · ${t("metastability", "metaestabilidad")} ${meta.tag} (${meta.label})` : ""}`,
+                subtitle: `τ(APR) = ${tau.toFixed(3)} · d_FR = ${dFR.toFixed(3)} · ∇ = ${curv.toFixed(3)} · ${Math.round(sim * 100)}% ${t("resonance", "resonancia")}${meta ? ` · ${t("metastability", "metaestabilidad")} ${meta.tag} (${meta.label})` : ""}`,
                 filename: `iso-${res.aClaimant}-vs-${res.bClaimant}.pdf`.replace(/\s+/g, "-").toLowerCase(),
                 crystals: [
                   { vec: res.vA, signature: signedSignature(res.vA, res.signsA), label: res.aClaimant, accent: [0, 245, 255] },
@@ -152,7 +157,9 @@ export function IsoPanel() {
             <div className="bg-gradient-to-b from-accent-gold/10 via-white/[0.04] to-accent-gold/10 border border-accent-gold/30 rounded-3xl p-6 flex flex-col items-center text-center">
               <div className="text-[10px] uppercase tracking-[0.3em] text-accent-gold mb-2">{t("The third", "El tercero")}</div>
               <div className="font-display font-black text-5xl mb-1">1<span className="text-accent-cyan">+</span>1<span className="text-accent-magenta">=</span><span className="text-accent-gold">3</span></div>
-              <div className="font-mono text-[10px] text-muted mb-1">τ = {dist.toFixed(3)} rad · {Math.round(sim * 100)}% {t("resonance", "resonancia")}</div>
+              <div className="font-mono text-[10px] text-muted mb-1">√(A·B) · {Math.round(sim * 100)}% {t("resonance", "resonancia")}</div>
+              <div className="font-mono text-[10px] text-muted mb-1">τ = sin²θ {tau.toFixed(3)} · d_FR {dFR.toFixed(3)} · ∇ {curv.toFixed(3)}</div>
+              {!breath && <div className="font-mono text-[10px] text-accent-magenta mb-1">I3 · {t("breath frozen (φe or φc = 0)", "respiración congelada (φe o φc = 0)")}</div>}
               {meta && (
                 <div className="font-mono text-[10px] text-accent-gold mb-3">
                   {t("metastability", "metaestabilidad")} · <span className="text-base align-middle">{meta.tag}</span> <span className="text-muted">({meta.label})</span>
