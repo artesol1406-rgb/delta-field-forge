@@ -91,13 +91,55 @@ export function metastability(midVec: Vec): { tag: 'Ξ' | 'φ+' | 'φ−'; label
   return { tag: 'φ−', label: 'contractive tendency' };
 }
 
+// ---- Manual Δ 2026.9.2 · Parte V: Fisher-Rao on the dipole space Σ ∈ (0,1)ⁿ ----
+// g_ii = 1/(Σ_i(1−Σ_i)) ⇒ per-dim geodesic 2|arcsin√a − arcsin√b|; combined in L2.
+export function fisherRaoDipole(a: Vec, b: Vec): number {
+  const c = (x: number) => Math.min(1, Math.max(0, x));
+  let s = 0;
+  DIMS.forEach(d => { const g = 2 * (Math.asin(Math.sqrt(c(a[d]))) - Math.asin(Math.sqrt(c(b[d])))); s += g * g; });
+  return Math.sqrt(s);
+}
 
+// ---- Manual Δ · Fase 3: amalgam = √(A·B) per dimension (geometric mean) ----
+export function amalgam(a: Vec, b: Vec): Vec {
+  const out = {} as Vec;
+  DIMS.forEach(d => { out[d] = Math.sqrt(Math.max(0, a[d]) * Math.max(0, b[d])); });
+  return out;
+}
+
+// ∇ (curvature, outside Σ): mean polar gap between the two crystals, in [0,1].
+export function curvature(a: Vec, b: Vec): number {
+  return DIMS.reduce((s, d) => s + Math.abs(a[d] - b[d]), 0) / DIMS.length;
+}
+
+// ---- APR v2 · tension τ = 1 − ‖P_B v_A‖²/‖v_A‖² = sin²θ (B's line as the plane) ----
+export function aprTension(a: Vec, b: Vec): number {
+  let dot = 0, na = 0, nb = 0;
+  DIMS.forEach(d => { dot += a[d] * b[d]; na += a[d] * a[d]; nb += b[d] * b[d]; });
+  if (na === 0 || nb === 0) return 1;
+  return Math.max(0, Math.min(1, 1 - (dot * dot) / (na * nb)));
+}
+
+// ---- APR v2 · resonance degree ρ = ‖Gˣ−Gʸ‖_F / ‖Gˣ‖_F (0 = exact resonance) ----
+export function gramResonance(x: number[][], y: number[][]): number {
+  const gram = (f: number[][]) => f.map(u => f.map(v => u.reduce((s, ui, k) => s + ui * v[k], 0)));
+  const gx = gram(x), gy = gram(y);
+  let num = 0, den = 0;
+  gx.forEach((row, i) => row.forEach((g, j) => { num += (g - gy[i][j]) ** 2; den += g * g; }));
+  return den === 0 ? 0 : Math.sqrt(num) / Math.sqrt(den);
+}
+
+// ---- Invariant I3 (breath): φe and φc must not freeze at 0 ----
+export function breathes(v: Vec): boolean {
+  return v['φe'] > 0 && v['φc'] > 0;
+}
 
 export function normalize(vec: Partial<Record<string, number>>): Vec {
   const out = {} as Vec;
   DIMS.forEach(d => {
-    const v = vec[d] ?? 0.08;
-    out[d] = Math.max(0, Math.min(1, Number(v) || 0.08));
+    const n = Number(vec[d]);
+    // v2: 0.0 and 1.0 are valid poles; only missing values fall back to a faint trace.
+    out[d] = Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0.08;
   });
   return out;
 }
