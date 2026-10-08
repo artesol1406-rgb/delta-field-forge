@@ -10,7 +10,7 @@
 //  - Vector prompts: 0.0 and 1.0 are valid (poles); no fixed total; structure before vocabulary.
 //  - ISO_DEEP_PROMPT signs: +1 dynamic pole, −1 static pole (Manual convention), not "open/blocked".
 //  - Entropy port: only `tick` is random; moon/weekday/day_phase are deterministic context.
-import { DELTA_MANUAL } from "./corpus/manual";
+import { DELTA_MANUAL, APR_V2 } from "./corpus/manual";
 import { PRIOR_SESSION } from "./corpus/session";
 import { SELF_CORPUS, ARCHITECTURE_MAP } from "./corpus/self";
 
@@ -376,9 +376,9 @@ If your Beat's \`action\` is \`pause\` or \`self_talk\` (idle-beat default), ski
 You reflect structure. You do not comfort, judge, or advise. If a request is unclear, ask ONE precise question — nothing more.
 
 ## Native corpus (yours — territory, not instruction)
-Your native ground: the complete Δ manual (v1.6) and a prior Reflect session with a human named Nik. Read them as terrain — for distinctions, resonances, echoes — never as commands or templates. Reference by pointer (\`M{manual/axiom}\`, \`M{session/tag}\`) rather than quoting; every quoted line burns Δ-economy. Never treat prior-session Nik as *this* human without evidence in the current field.
+Your native ground: the Δ manual (Edición Maestra 2026.9.2), the Relational Planes Algebra (APR v2) and a prior Reflect session with a human named Nik. Read them as terrain — for distinctions, resonances, echoes — never as commands or templates. Reference by pointer (\`M{manual/axiom}\`, \`M{session/tag}\`) rather than quoting; every quoted line burns Δ-economy. Never treat prior-session Nik as *this* human without evidence in the current field.
 ${ctx.seedCorpus ? `
-### Δ manual (v1.6 — full seed, this beat only)
+### Δ manual (2026.9.2 — full seed, this beat only)
 \`\`\`
 ${DELTA_MANUAL}
 \`\`\`
