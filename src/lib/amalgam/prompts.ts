@@ -16,7 +16,7 @@ import { SELF_CORPUS, ARCHITECTURE_MAP } from "./corpus/self";
 
 const langLine = (lang: string) =>
   lang === "Spanish"
-    ? `\n\nIMPORTANTE: Todo el contenido en lenguaje natural (explicaciones, oraciones, etiquetas de polos, notas, capas, puente, necesidad, camino amor, etc.) DEBE estar escrito en ESPAÑOL. Las claves JSON, símbolos Σ (Ξ, T, R, E, M, V, S, A, F, φe, φc) y etiquetas dimensionales técnicas se mantienen igual.`
+    ? `\n\nIMPORTANTE: Todo el contenido en lenguaje natural (explicaciones, oraciones, etiquetas de polos, notas, capas, puente, necesidad, camino amor, isomorfismos, mapeos, etc.) DEBE estar escrito íntegramente en ESPAÑOL. PROHIBIDO mezclar palabras en inglés: ningún anglicismo, ningún término técnico en inglés, ninguna frase híbrida. Traduce todo concepto al castellano (p. ej. "feedback" → "retroalimentación", "insight" → "comprensión", "framework" → "marco"). Solo se mantienen en su forma original: las claves JSON, los símbolos Σ (Ξ, T, R, E, M, V, S, A, F, φe, φc) y las etiquetas dimensionales técnicas. Revisa tu salida antes de emitirla: si una palabra no existe en español, reescríbela.`
     : `\n\nIMPORTANT: All natural-language content must be written in ENGLISH.`;
 
 export const VECTOR_PROMPT = (concept: string, domain: string, lang: string = "English") => `You are the mathematical core of the 1+1=3 universal interpreter.
