@@ -83,11 +83,15 @@ function closeNest(syms: string[]): string {
   return `${syms[0]} { ${closeNest(syms.slice(1))} }`;
 }
 
+// Nesting order follows polarity (Iso/Reflect): receptive/static dims form the
+// outer frame, active/dynamic dims the inner flow. Within each pole, stronger
+// intensity sits further out. Ξ always opens (I5) and is not re-nested.
 function dominantDims(vec: Vec): Dim[] {
-  return DIMS
-    .filter(d => d !== 'Ξ' && vec[d] > SIG_THRESHOLD)
-    .sort((a, b) => vec[b] - vec[a])
-    .slice(0, SIG_MAX_DEPTH);
+  const dims = DIMS.filter(d => d !== 'Ξ' && vec[d] > SIG_THRESHOLD);
+  const byIntensity = (a: Dim, b: Dim) => vec[b] - vec[a];
+  const receptive = dims.filter(d => DIM_POLARITY[d] === 'receptive').sort(byIntensity);
+  const active = dims.filter(d => DIM_POLARITY[d] === 'active').sort(byIntensity);
+  return [...receptive, ...active].slice(0, SIG_MAX_DEPTH);
 }
 
 export function toSignature(vec: Vec): string {
