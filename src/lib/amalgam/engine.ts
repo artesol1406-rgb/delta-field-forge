@@ -66,8 +66,7 @@ const SIG_MAX_DEPTH = 6;
 
 export function nestSignature(symbols: string[]): string {
   const inner = symbols.filter(s => s && !s.startsWith('Ξ'));
-  return inner.reduceRight((acc, s) => `${s} { ${acc} }`, '').replace(/ \{  \}$/, '')
-    .replace(/^(.*)$/, (body) => body ? `Ξ { ${closeNest(inner)} }` : 'Ξ');
+  return inner.length ? `Ξ { ${closeNest(inner)} }` : 'Ξ';
 }
 
 function closeNest(syms: string[]): string {
