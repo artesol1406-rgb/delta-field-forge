@@ -5,10 +5,10 @@ function parseSigma(sigma: string): Record<string, number> {
   for (const d of DIMS) out[d] = 0;
   if (!sigma) return out;
   // Match tokens like "T+", "R-", "Ξ0", "φe+", "φc-"
-  const re = /(Ξ|φe|φc|[TREMVSAF])\s*([+\-0])/g;
+  const re = /(Ξ|φe|φc|[TREMVSAF])\s*([+\-−0])/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(sigma)) !== null) {
-    const sign = m[2] === "+" ? 1 : m[2] === "-" ? -1 : 0;
+    const sign = m[2] === "+" ? 1 : m[2] === "-" || m[2] === "−" ? -1 : 0;
     out[m[1]] = sign;
   }
   return out;
