@@ -64,6 +64,15 @@ export function fisherRao(a: Vec, b: Vec): number {
 const SIG_THRESHOLD = 0.4;
 const SIG_MAX_DEPTH = 6;
 
+// Polarity per dimension, as read in Iso/Reflect: outer levels of the nest are
+// the receptive/static frame, inner levels the active/dynamic flow.
+// Receptive/static: M (memory), S (system), R (relation), φc (contraction).
+// Active/dynamic: A, E, T, F, φe, and V (voiding = active release).
+export const DIM_POLARITY: Record<Dim, 'receptive' | 'active'> = {
+  'Ξ': 'receptive', 'M': 'receptive', 'S': 'receptive', 'R': 'receptive', 'φc': 'receptive',
+  'A': 'active', 'E': 'active', 'T': 'active', 'F': 'active', 'V': 'active', 'φe': 'active',
+};
+
 export function nestSignature(symbols: string[]): string {
   const inner = symbols.filter(s => s && !s.startsWith('Ξ'));
   return inner.length ? `Ξ { ${closeNest(inner)} }` : 'Ξ';
