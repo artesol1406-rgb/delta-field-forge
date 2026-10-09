@@ -18,3 +18,14 @@ describe("Δ engine (Manual 2026.9.2 + APR v2)", () => {
     expect(breathes(n)).toBe(false);
   });
 });
+
+import { toSignature as _sig, nestSignature as _nest } from "./engine";
+describe("canonical signature (Manual §2–§4)", () => {
+  it("opens with Ξ and nests one symbol per level", () => {
+    expect(_nest(["R", "V", "M", "φe"])).toBe("Ξ { R { V { M { φe } } } }");
+  });
+  it("empty field is bare Ξ", () => {
+    const v: any = {}; ["Ξ","T","R","E","M","V","S","A","F","φe","φc"].forEach(d => v[d] = 0.1);
+    expect(_sig(v)).toBe("Ξ");
+  });
+});
