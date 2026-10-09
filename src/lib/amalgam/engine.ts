@@ -57,15 +57,33 @@ export function fisherRao(a: Vec, b: Vec): number {
   return Math.acos(Math.min(1, Math.max(-1, dot)));
 }
 
+// ---- Manual Δ · Parte I §2–§4: canonical nested signature ----
+// Ξ opens every signature (I5, container obligatorio). Symbols nest one inside
+// another with {}: outermost = receptive container, innermost = active core.
+// One symbol per level — no siblings, no words, no human names.
+const SIG_THRESHOLD = 0.4;
+const SIG_MAX_DEPTH = 6;
+
+export function nestSignature(symbols: string[]): string {
+  const inner = symbols.filter(s => s && !s.startsWith('Ξ'));
+  return inner.reduceRight((acc, s) => `${s} { ${acc} }`, '').replace(/ \{  \}$/, '')
+    .replace(/^(.*)$/, (body) => body ? `Ξ { ${closeNest(inner)} }` : 'Ξ');
+}
+
+function closeNest(syms: string[]): string {
+  if (syms.length === 1) return syms[0];
+  return `${syms[0]} { ${closeNest(syms.slice(1))} }`;
+}
+
+function dominantDims(vec: Vec): Dim[] {
+  return DIMS
+    .filter(d => d !== 'Ξ' && vec[d] > SIG_THRESHOLD)
+    .sort((a, b) => vec[b] - vec[a])
+    .slice(0, SIG_MAX_DEPTH);
+}
+
 export function toSignature(vec: Vec): string {
-  const dom = DIMS.filter(d => vec[d] > 0.45).sort((a,b) => vec[b]-vec[a]);
-  if (!dom.length) return 'Ξ { E }';
-  if (dom.length === 1) return dom[0];
-  if (dom.includes('M') && dom.includes('R')) return `M { R { ${dom[2]||'E'} } }`;
-  if (dom.includes('T') && dom.includes('E')) return `T { E }`;
-  if (dom.includes('E') && dom.includes('R')) return `E { R }`;
-  if (dom.includes('S') && dom.includes('A')) return `S { A }`;
-  return `${dom[0]} { ${dom[1]} }`;
+  return nestSignature(dominantDims(vec));
 }
 
 export type Sign = -1 | 0 | 1;
@@ -76,10 +94,14 @@ export function signedSignature(vec: Vec, signs: Signs): string {
     const s = signs[d] ?? 0;
     return s === 1 ? `${d}+` : s === -1 ? `${d}−` : d;
   };
-  const dom = DIMS.filter(d => vec[d] > 0.4).sort((a, b) => vec[b] - vec[a]);
-  if (!dom.length) return tag('Ξ');
-  if (dom.length === 1) return tag(dom[0]);
-  return `${tag(dom[0])} { ${dom.slice(1, 4).map(tag).join(' ')} }`;
+  return nestSignature(dominantDims(vec).map(tag));
+}
+
+// Manual Δ §10: Token3 (D,I,F) lives only in [Motion]. F is not inferred here,
+// so Motion carries D and I; Ξ always opens at 0.0.
+export function motionLine(vec: Vec): string {
+  const parts = ['(Ξ,0.0)', ...dominantDims(vec).map(d => `(${d},${vec[d].toFixed(2)})`)];
+  return `[Motion: ${parts.join('; ')}]`;
 }
 
 export function metastability(midVec: Vec): { tag: 'Ξ' | 'φ+' | 'φ−'; label: string } {
