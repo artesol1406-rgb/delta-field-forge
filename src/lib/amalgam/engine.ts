@@ -64,6 +64,15 @@ export function fisherRao(a: Vec, b: Vec): number {
 const SIG_THRESHOLD = 0.4;
 const SIG_MAX_DEPTH = 6;
 
+// Polarity per dimension, as read in Iso/Reflect: outer levels of the nest are
+// the receptive/static frame, inner levels the active/dynamic flow.
+// Receptive/static: M (memory), S (system), R (relation), φc (contraction).
+// Active/dynamic: A, E, T, F, φe, and V (voiding = active release).
+export const DIM_POLARITY: Record<Dim, 'receptive' | 'active'> = {
+  'Ξ': 'receptive', 'M': 'receptive', 'S': 'receptive', 'R': 'receptive', 'φc': 'receptive',
+  'A': 'active', 'E': 'active', 'T': 'active', 'F': 'active', 'V': 'active', 'φe': 'active',
+};
+
 export function nestSignature(symbols: string[]): string {
   const inner = symbols.filter(s => s && !s.startsWith('Ξ'));
   return inner.length ? `Ξ { ${closeNest(inner)} }` : 'Ξ';
@@ -74,11 +83,15 @@ function closeNest(syms: string[]): string {
   return `${syms[0]} { ${closeNest(syms.slice(1))} }`;
 }
 
+// Nesting order follows polarity (Iso/Reflect): receptive/static dims form the
+// outer frame, active/dynamic dims the inner flow. Within each pole, stronger
+// intensity sits further out. Ξ always opens (I5) and is not re-nested.
 function dominantDims(vec: Vec): Dim[] {
-  return DIMS
-    .filter(d => d !== 'Ξ' && vec[d] > SIG_THRESHOLD)
-    .sort((a, b) => vec[b] - vec[a])
-    .slice(0, SIG_MAX_DEPTH);
+  const dims = DIMS.filter(d => d !== 'Ξ' && vec[d] > SIG_THRESHOLD);
+  const byIntensity = (a: Dim, b: Dim) => vec[b] - vec[a];
+  const receptive = dims.filter(d => DIM_POLARITY[d] === 'receptive').sort(byIntensity);
+  const active = dims.filter(d => DIM_POLARITY[d] === 'active').sort(byIntensity);
+  return [...receptive, ...active].slice(0, SIG_MAX_DEPTH);
 }
 
 export function toSignature(vec: Vec): string {

@@ -28,4 +28,10 @@ describe("canonical signature (Manual §2–§4)", () => {
     const v: any = {}; ["Ξ","T","R","E","M","V","S","A","F","φe","φc"].forEach(d => v[d] = 0.1);
     expect(_sig(v)).toBe("Ξ");
   });
+  it("nests receptive/static outside, active/dynamic inside (Iso/Reflect polarity)", () => {
+    const v: any = {}; ["Ξ","T","R","E","M","V","S","A","F","φe","φc"].forEach(d => v[d] = 0.1);
+    v.M = 0.6; v.S = 0.9; v.A = 0.95; v.E = 0.7;
+    // receptive frame (S>M) outside, active flow (A>E) inside, regardless of raw intensity
+    expect(_sig(v)).toBe("Ξ { S { M { A { E } } } }");
+  });
 });
